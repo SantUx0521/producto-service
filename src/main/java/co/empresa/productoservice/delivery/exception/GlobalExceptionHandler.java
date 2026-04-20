@@ -1,9 +1,8 @@
+// src/.../delivery/exception/GlobalExceptionHandler.java
 package co.empresa.productoservice.delivery.exception;
 
-
-import co.empresa.productoservice.domain.exception.*;
-import co.empresa.productoservice.domain.model.Producto;
-import org.springframework.dao.DataAccessException;
+import co.empresa.productoservice.domain.exception.ProductoNoEncontradoException;
+import co.empresa.productoservice.domain.exception.ValidationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -13,82 +12,39 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+// @RestControllerAdvice: intercepta excepciones lanzadas desde cualquier @RestController
+// Es un @Component — Spring lo detecta y registra automáticamente
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private static final String ERROR = "error";
-    private static final String MENSAJE = "mensaje";
-    private static final String PRODUCTO = "producto";
-    private static final String PRODUCTOS = "productos";
-    private static final String STATUS = "status";
-
-    @ExceptionHandler(PaginaSinProductosException.class)
-    public ResponseEntity<Map<String, Object>> handlePaginaSinProductos(PaginaSinProductosException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put(MENSAJE, ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put(MENSAJE, "Número de página inválido.");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-    }
-
-    @ExceptionHandler(NoHayProductosException.class)
-    public ResponseEntity<Map<String, Object>> handleNoHayProductos(NoHayProductosException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put(MENSAJE, "No hay productos en la base de datos.");
-        response.put(PRODUCTOS, null); // para que sea siempre el mismo campo
-        return ResponseEntity.status(HttpStatus.OK).body(response); // 200 pero lista vacía
+    // @ExceptionHandler: este método se ejecuta cuando se lanza ValidationException
+    // en cualquier controlador de la aplicación
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleValidationException(ValidationException ex) {
+        List<String> errores = ex.getResult().getFieldErrors().stream()
+                .map(err -> "El campo '" + err.getField() + "': " + err.getDefaultMessage())
+                .toList();
+        Map<String, Object> respuesta = new HashMap<>();
+        respuesta.put("errores", errores);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(respuesta);
     }
 
     @ExceptionHandler(ProductoNoEncontradoException.class)
-    public ResponseEntity<Map<String, Object>> handleProductoNoEncontrado(ProductoNoEncontradoException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put(ERROR, ex.getMessage());
-        response.put(STATUS, HttpStatus.NOT_FOUND.value());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    public ResponseEntity<Map<String, Object>> handleProductoNoEncontrado(
+            ProductoNoEncontradoException ex) {
+        Map<String, Object> respuesta = new HashMap<>();
+        respuesta.put("error", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(respuesta);
     }
 
-    @ExceptionHandler(ProductoExistenteException.class)
-    public ResponseEntity<Map<String, Object>> handleProductoExistente(ProductoExistenteException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put(ERROR, ex.getMessage());
-        response.put(STATUS, HttpStatus.BAD_REQUEST.value());
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }
-
+    // Captura genérica: cualquier excepción no manejada específicamente
+    // Evita que el usuario vea stack traces en la respuesta HTTP
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGeneralException(Exception ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put(ERROR, "Error inesperado: " + ex.getMessage());
-        response.put(STATUS, HttpStatus.INTERNAL_SERVER_ERROR.value());
-        return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-
-    @ExceptionHandler(DataAccessException.class)
-    public ResponseEntity<Map<String, Object>> handleDataAccessException(DataAccessException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put(MENSAJE, "Error al consultar la base de datos.");
-        response.put(ERROR, ex.getMessage().concat(": ").concat(ex.getMostSpecificCause().getMessage()));
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-    }
-
-    @ExceptionHandler(ValidationException.class)
-    public ResponseEntity<Map<String, Object>> handleValidationException(ValidationException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put(MENSAJE, ex.getMessage());
-        response.put(ERROR, ex.getMessage());
-
-        List<String> errors = ex.result.getFieldErrors()
-                .stream()
-                .map(err -> "El campo '" + err.getField() + "' " + err.getDefaultMessage())
-                .toList();
-
-        response.put(ERROR, errors);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-
+    public ResponseEntity<Map<String, Object>> handleException(Exception ex) {
+        Map<String, Object> respuesta = new HashMap<>();
+        respuesta.put("error", "Ocurrió un error interno. Por favor contacta al soporte.");
+        // Loguear el error real (sin exponerlo al cliente)
+        // log.error("Error interno", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(respuesta);
     }
 }
